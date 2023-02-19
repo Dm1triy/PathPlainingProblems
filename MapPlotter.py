@@ -70,11 +70,22 @@ class MapPlotter:
         return np.round((x - self.start_x) * self.cell_size, 2), \
                np.round((self.start_y - y) * self.cell_size, 2)
 
+    def obstacle_indexes(self, lidar):
+        for i in range(len(lidar)):
+            ang = i * math.radians(240)/len(lidar) -
+
     def map_in_time(self, index):
         cur_data = self.log_data[index]
         robot_x, robot_y, robot_ang = cur_data[0]
         robot_indx = self.pos_to_cell(robot_x, robot_y)
+        for i, val in enumerate(cur_data[1]):
+            lidar_ang = i * math.radians(240) / len(cur_data[1]) - robot_ang - math.radians(30)
+            lidar_dist = val
+            if lidar_dist > 5 or lidar_dist < 0.5:
+                continue
 
+            obs_pos_x, obs_pos_y = lidar_dist * math.cos(lidar_ang), lidar_dist * math.sin(lidar_ang)
+            obs_cell_x = self.pos_to_cell(obs_pos_x, obs_pos_y)
 
 
 
