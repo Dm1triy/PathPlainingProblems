@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 import math
 from rdp import rdp
+import cv2 as cv
+import random as rng
+
 class MapPlotter:
     def __init__(self, log='examp4.txt'):
         self.cell_size = 0.1  # m
@@ -79,11 +82,13 @@ class MapPlotter:
         for i in range(len(lidar)):
             if lidar[i] > 5 or lidar[i] < 0.5:
                 continue
-            ang = math.radians(240)/len(lidar) * i + robot_ang - math.radians(120)
+            ang = math.radians(240)/len(lidar) * i - robot_ang - math.radians(120)
+
             # lidar radius in meter therefore radius*cos(ang) should be converted to the index
-            local_indx = int(lidar[i] * math.cos(ang)/self.cell_size),\
-                         int(lidar[i] * math.sin(ang)/self.cell_size)
-            obs_indx.append([robot_pos[0] + local_indx[0], robot_pos[1] - local_indx[1]])
+            # 0.3 * math.cos(robot_ang) and 0.3 * math.sin(robot_ang) are x and y of the Lidar in front of the robot
+            local_indx = 0.3 * math.cos(robot_ang) + lidar[i] * math.cos(ang)/self.cell_size,\
+                         0.3 * math.sin(robot_ang) + lidar[i] * math.sin(ang)/self.cell_size
+            obs_indx.append([int(robot_pos[0] + local_indx[0]), int(robot_pos[1] + local_indx[1])])
         # convert [[i1, j1], [i2, j2], ...] into [[i1, i2, ...], [j1, j1, ...]]
         obs_indx = np.array(obs_indx)
         obs_indx = np.array(np.split(obs_indx, 2, axis=1))
@@ -99,43 +104,71 @@ class MapPlotter:
 
         obstacle_indx = self.obstacle_indexes(robot_indx, robot_ang, cur_data[1])
         self.map[obstacle_indx[1], obstacle_indx[0]] = 1
-        # self.print_map(robot_indx, robot_dir)
         return robot_indx, robot_dir
 
+    # Ramer–Douglas–Peucker alg (not used anywhere)
     def reduce_map(self):
         obs_indexes = np.where(self.map == 1)
         self.map[obs_indexes[0], obs_indexes[1]] = 0
         obs_indexes = np.stack(obs_indexes, axis=1)
 
-        new_indexes = rdp(obs_indexes, epsilon=1)
+        new_indexes = rdp(obs_indexes, epsilon=0)
         new_indexes = np.array(np.split(new_indexes, 2, axis=1))
         new_indexes = new_indexes.reshape(new_indexes.shape[0], new_indexes.shape[1])
         self.map[new_indexes[0], new_indexes[1]] = 1
 
     def final_map(self):
-        robot_pos, robot_dir = [], []
+        trajectory = []
+        robot_dir = []
         for i in range(len(self.log_data)):
-            if i%5 == 0:
-                self.reduce_map()
             robot_pos, robot_dir = self.map_in_time(i)
-        self.reduce_map()
-        self.print_map(robot_pos, robot_dir)
-        self.rectangle_map()
-        self.print_map(robot_pos, robot_dir)
+            trajectory.append(robot_pos)
+        self.print_map(trajectory[-1], robot_dir)
+        self.print_processed_map(trajectory)
 
-    def rectangle_map(self):
-        indexes = np.where(self.map == 1)
-        self.map[indexes[0], indexes[1]] = 0
-        min_y, max_y = int(np.quantile(indexes[0], .1)), int(np.quantile(indexes[0], .9))
-        min_x, max_x = int(np.quantile(indexes[1], .1)), int(np.quantile(indexes[1], .8))
-        vertical = np.arange(min_y, max_y, 1)
-        horizontal = np.arange(min_x, max_x, 1)
-        self.map[vertical, min_x] = 1
-        self.map[vertical, max_x] = 1
-        self.map[min_y, horizontal] = 1
-        self.map[min_y-1, horizontal] = 1
-        self.map[max_y, horizontal] = 1
-        self.map[max_y+1, horizontal] = 1
+    def print_processed_map(self, trajectory):
+        img = np.zeros((self.map_width, self.map_height, 3), np.uint8)
+        t_map = np.array(self.map, np.uint8) * 255
+
+        lines = cv.HoughLinesP(t_map, 2, np.pi/180, 59, 7, 6)
+        for i in range(len(lines)):
+            for x1, y1, x2, y2 in lines[i]:
+                cv.line(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+        scale = 400
+        width = int(img.shape[1] * scale / 100)
+        height = int(img.shape[0] * scale / 100)
+        img = cv.resize(img, (width, height), interpolation=cv.INTER_AREA)
+
+        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        threshold = 10
+        canny = cv.Canny(gray, threshold, threshold * 2)
+        contours, hierarchy = cv.findContours(canny, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+        # contour printing
+        map_contours = np.zeros((canny.shape[0], canny.shape[1], 3), dtype=np.uint8)
+        for i in range(len(contours)):
+            cv.drawContours(map_contours, contours, i, (255, 0, 0))
+
+        hull = []
+        for i in range(len(contours)):
+            hull.append (cv.convexHull(contours[i]))
+
+        map_hull = np.zeros((canny.shape[0], canny.shape[1], 3), dtype=np.uint8)
+        for i in range(len(contours)):
+            cv.drawContours(map_hull, hull, i, (255, 0, 0))
+
+        # print robot trajectory
+        for i in range(len(trajectory)):
+            center = (int(trajectory[i][0] * scale/100), int(trajectory[i][1] * scale/100))
+            cv.circle(map_contours, center, 4, (0, 0, 255))
+            cv.circle(map_hull, center, 4, (0, 0, 255))
+
+        cv.imshow('borders', map_hull)
+        cv.waitKey(0)
+        cv.imshow('borders', map_contours)
+        cv.waitKey(0)
+        cv.destroyAllWindows()
 
 
 if __name__ == '__main__':
