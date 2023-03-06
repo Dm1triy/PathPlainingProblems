@@ -4,7 +4,7 @@ from matplotlib import colors
 import math
 from rdp import rdp
 import cv2 as cv
-import random as rng
+
 
 class MapPlotter:
     def __init__(self, log='examp4.txt'):
@@ -135,9 +135,9 @@ class MapPlotter:
             for x1, y1, x2, y2 in lines[i]:
                 cv.line(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-        scale = 400
-        width = int(img.shape[1] * scale / 100)
-        height = int(img.shape[0] * scale / 100)
+        scale = 4
+        width = int(img.shape[1] * scale)
+        height = int(img.shape[0] * scale)
         img = cv.resize(img, (width, height), interpolation=cv.INTER_AREA)
 
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
@@ -152,23 +152,29 @@ class MapPlotter:
 
         hull = []
         for i in range(len(contours)):
-            hull.append (cv.convexHull(contours[i]))
+            hull.append(cv.convexHull(contours[i]))
 
         map_hull = np.zeros((canny.shape[0], canny.shape[1], 3), dtype=np.uint8)
         for i in range(len(contours)):
             cv.drawContours(map_hull, hull, i, (255, 0, 0))
 
-        # print robot trajectory
+        # print the robot trajectory
         for i in range(len(trajectory)):
-            center = (int(trajectory[i][0] * scale/100), int(trajectory[i][1] * scale/100))
-            cv.circle(map_contours, center, 4, (0, 0, 255))
-            cv.circle(map_hull, center, 4, (0, 0, 255))
+            center = (int(trajectory[i][0] * scale), int(trajectory[i][1] * scale))
+            cv.circle(map_contours, center, 3, (0, 0, 255))
+            cv.circle(map_hull, center, 3, (0, 0, 255))
 
         cv.imshow('borders', map_hull)
         cv.waitKey(0)
         cv.imshow('borders', map_contours)
         cv.waitKey(0)
         cv.destroyAllWindows()
+
+        # rewrite the map with the processed map
+        map_contours = cv.resize(img, (self.map_width, self.map_height), interpolation=cv.INTER_AREA)
+        map_contours = np.amax(map_contours, axis=2)
+        map_contours = np.where(map_contours == 255, 1, 0)
+        self.map = map_contours
 
 
 if __name__ == '__main__':
