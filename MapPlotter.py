@@ -4,6 +4,7 @@ from matplotlib import colors
 import math
 from rdp import rdp
 import cv2 as cv
+from Dijkstra import Dijkstra
 
 
 class MapPlotter:
@@ -15,6 +16,8 @@ class MapPlotter:
         self.start_x = self.map_width//2
         self.start_y = self.map_height//2
         self.log_data = self.read_log(log)
+
+        self.alg = None
 
     @staticmethod
     def read_log(log):
@@ -30,7 +33,19 @@ class MapPlotter:
             data.append([odom, lidar])
         return data
 
-    def print_map(self, robot, direction):
+    @staticmethod
+    def reshape_array(array):
+        """
+        Convert [[i1, j1], [i2, j2], ...] into [[i1, i2, ...], [j1, j1, ...]]
+        :param: array [[i1, j1], [i2, j2], ...]
+        :return: array [[i1, i2, ...], [j1, j1, ...]]
+        """
+        array = np.array(array)
+        array = np.array(np.split(array, 2, axis=1))
+        array = array.reshape(array.shape[0], array.shape[1])
+        return array
+
+    def print_map(self, robot, direction=None):
         fig, ax = plt.subplots(figsize=(15, 8))
         cmap = colors.ListedColormap(['White', 'Blue'])
         ax.pcolor(self.map, cmap=cmap, snap=True)
@@ -38,8 +53,8 @@ class MapPlotter:
         ax.set_xlim(self.start_x, self.map_width)  # ax.set_xlim(0, self.map_width)
         ax.set_ylim(0, self.map_height)
         ax.invert_yaxis()
-
-        ax.quiver(robot[0] + 0.5, robot[1] + 0.5, direction[0], direction[1], color='r')
+        if direction:
+            ax.quiver(robot[0] + 0.5, robot[1] + 0.5, direction[0], direction[1], color='r')
         ax.scatter(robot[0] + 0.5, robot[1] + 0.5, marker='P')
 
         majorx_ticks = np.arange(self.start_x, self.map_width-1, 10) # majorx_ticks = np.arange(0, self.map_width-1, 10)
@@ -89,10 +104,7 @@ class MapPlotter:
             local_indx = 0.3 * math.cos(robot_ang) + lidar[i] * math.cos(ang)/self.cell_size,\
                          0.3 * math.sin(robot_ang) + lidar[i] * math.sin(ang)/self.cell_size
             obs_indx.append([int(robot_pos[0] + local_indx[0]), int(robot_pos[1] + local_indx[1])])
-        # convert [[i1, j1], [i2, j2], ...] into [[i1, i2, ...], [j1, j1, ...]]
-        obs_indx = np.array(obs_indx)
-        obs_indx = np.array(np.split(obs_indx, 2, axis=1))
-        obs_indx = obs_indx.reshape(obs_indx.shape[0], obs_indx.shape[1])
+        obs_indx = self.reshape_array(obs_indx)
         return obs_indx
 
     def map_in_time(self, index):
@@ -113,8 +125,7 @@ class MapPlotter:
         obs_indexes = np.stack(obs_indexes, axis=1)
 
         new_indexes = rdp(obs_indexes, epsilon=0)
-        new_indexes = np.array(np.split(new_indexes, 2, axis=1))
-        new_indexes = new_indexes.reshape(new_indexes.shape[0], new_indexes.shape[1])
+        new_indexes = self.reshape_array(new_indexes)
         self.map[new_indexes[0], new_indexes[1]] = 1
 
     def final_map(self):
@@ -164,19 +175,67 @@ class MapPlotter:
             cv.circle(map_contours, center, 3, (0, 0, 255))
             cv.circle(map_hull, center, 3, (0, 0, 255))
 
-        cv.imshow('borders', map_hull)
-        cv.waitKey(0)
-        cv.imshow('borders', map_contours)
-        cv.waitKey(0)
-        cv.destroyAllWindows()
+        # cv.imshow('borders', map_hull)
+        # cv.waitKey(0)
+        # cv.imshow('borders', map_contours)
+        # cv.waitKey(0)
+        # cv.destroyAllWindows()
 
         # rewrite the map with the processed map
         map_contours = cv.resize(img, (self.map_width, self.map_height), interpolation=cv.INTER_AREA)
         map_contours = np.amax(map_contours, axis=2)
         map_contours = np.where(map_contours == 255, 1, 0)
         self.map = map_contours
+        self.print_map(trajectory[0])
+
+    def path_planning_sim(self):
+        start_point = 160, 160
+        end_point = 125, 195
+        space = self.map.copy()
+        self.alg = Dijkstra(start_point=np.array(start_point),
+                            end_point=np.array(end_point), bin_map=space)
+        ax, fig = self.init_plot(start_point[::-1], end_point[::-1], space)
+
+        i = 0
+        while not self.alg.dist_reached:
+            self.alg.step()
+            if i % 200 == 0:
+                node_indx = self.reshape_array(self.alg.nodes)
+                ax.scatter(node_indx[1]+0.5, node_indx[0]+0.5, color='y', s=2, marker='H')
+                plt.pause(0.1)
+            i += 1
+        path = self.alg.get_path()
+        path = self.reshape_array(path)
+        ax.scatter(path[1]+0.5, path[0]+0.5, color='r', s=10, marker='H')
+        plt.show()
+
+    def init_plot(self, start_point, end_point, space):
+        start = plt.Circle(start_point, 1, color='r')
+        end = plt.Circle(end_point, 1, color='r')
+        fig, ax = plt.subplots(figsize=(15, 8))
+        cmap = colors.ListedColormap(['White', 'Blue'])
+        ax.pcolor(space, cmap=cmap, snap=True)
+        ax.add_patch(start)
+        ax.add_patch(end)
+        ax.set_xlim(self.start_x, self.map_width)
+        ax.set_ylim(0, self.map_height)
+        ax.invert_yaxis()
+
+        majorx_ticks = np.arange(self.start_x, self.map_width - 1, 10)
+        minorx_ticks = np.arange(self.start_x, self.map_width - 1, 1)
+        majory_ticks = np.arange(0, self.map_height - 1, 10)
+        minory_ticks = np.arange(0, self.map_height - 1, 1)
+
+        ax.set_xticks(majorx_ticks)
+        ax.set_xticks(minorx_ticks, minor=True)
+        ax.set_yticks(majory_ticks)
+        ax.set_yticks(minory_ticks, minor=True)
+        ax.grid(which='Both')
+        fig.tight_layout()
+        return ax, fig
 
 
 if __name__ == '__main__':
     new_map = MapPlotter()
     new_map.final_map()
+    new_map.path_planning_sim()
