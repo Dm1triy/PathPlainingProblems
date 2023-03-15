@@ -4,7 +4,9 @@ from matplotlib import colors
 import math
 from rdp import rdp
 import cv2 as cv
+
 from Dijkstra import Dijkstra
+from A_star import Astar
 
 
 class MapPlotter:
@@ -192,8 +194,8 @@ class MapPlotter:
         start_point = 160, 160
         end_point = 125, 195
         space = self.map.copy()
-        self.alg = Dijkstra(start_point=np.array(start_point),
-                            end_point=np.array(end_point), bin_map=space)
+        self.alg = Astar(start_point=np.array(start_point),
+                         end_point=np.array(end_point), bin_map=space)
         ax, fig = self.init_plot(start_point[::-1], end_point[::-1], space)
 
         i = 0
