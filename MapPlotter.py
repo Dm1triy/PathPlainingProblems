@@ -7,6 +7,7 @@ import cv2 as cv
 
 from Dijkstra import Dijkstra
 from A_star import Astar
+from RRT_star import Rrtstar
 
 
 class MapPlotter:
@@ -59,14 +60,14 @@ class MapPlotter:
             ax.quiver(robot[0] + 0.5, robot[1] + 0.5, direction[0], direction[1], color='r')
         ax.scatter(robot[0] + 0.5, robot[1] + 0.5, marker='P')
 
-        majorx_ticks = np.arange(self.start_x, self.map_width-1, 10) # majorx_ticks = np.arange(0, self.map_width-1, 10)
-        minorx_ticks = np.arange(self.start_x, self.map_width-1, 1) # minorx_ticks = np.arange(0, self.map_width-1, 1)
+        majorx_ticks = np.arange(self.start_x, self.map_width-1, 10)    # majorx_ticks = np.arange(0, self.map_width-1, 10)
+        minorx_ticks = np.arange(self.start_x, self.map_width-1, 1)     # minorx_ticks = np.arange(0, self.map_width-1, 1)
         majory_ticks = np.arange(0, self.map_height-1, 10)
         minory_ticks = np.arange(0, self.map_height-1, 1)
 
         x_lim = (self.map_width-1) * self.cell_size/2
         y_lim = (self.map_height-1) * self.cell_size/2
-        majorx_labels = np.arange(0, x_lim, 10 * self.cell_size)    #majorx_labels = np.arange(-x_lim, x_lim, 10 * self.cell_size)
+        majorx_labels = np.arange(0, x_lim, 10 * self.cell_size)    # majorx_labels = np.arange(-x_lim, x_lim, 10 * self.cell_size)
 
         majory_labels = np.arange(-y_lim, y_lim, 10 * self.cell_size)
         majory_labels = majory_labels * -1
@@ -191,12 +192,16 @@ class MapPlotter:
         self.print_map(trajectory[0])
 
     def path_planning_sim(self):
+        # start_point = 160, 160
+        # end_point = 125, 195
         start_point = 160, 160
-        end_point = 125, 195
+        end_point = 195, 125
         space = self.map.copy()
-        self.alg = Astar(start_point=np.array(start_point),
-                         end_point=np.array(end_point), bin_map=space)
-        ax, fig = self.init_plot(start_point[::-1], end_point[::-1], space)
+        # self.alg = Astar(start_point=np.array(start_point),
+        #                  end_point=np.array(end_point), bin_map=space)
+        self.alg = Rrtstar(start_point=np.array(start_point),
+                           end_point=np.array(end_point), bin_map=space)
+        ax, fig = self.init_plot(start_point, end_point, space)
 
         i = 0
         while not self.alg.dist_reached:
@@ -207,9 +212,13 @@ class MapPlotter:
                 plt.pause(0.1)
             i += 1
         path = self.alg.get_path()
+        if not path:
+            return
         path = self.reshape_array(path)
         ax.scatter(path[1]+0.5, path[0]+0.5, color='r', s=10, marker='H')
         plt.show()
+
+    def display_connections(self):
 
     def init_plot(self, start_point, end_point, space):
         start = plt.Circle(start_point, 1, color='r')

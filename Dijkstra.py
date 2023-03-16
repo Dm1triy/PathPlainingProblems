@@ -1,7 +1,7 @@
 import numpy as np
 import math
 
-
+# check x and y in is_obstacle
 class Dijkstra:
     def __init__(self, start_point=None,
                  end_point=None, bin_map=None):
