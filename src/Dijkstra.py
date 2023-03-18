@@ -27,7 +27,6 @@ class Dijkstra:
         self.dist_reached = False
         self.end_node = -1
         self.path = []
-        self.graph_printed = False  # ??
 
         self.motion = self.get_motion_model()
 
@@ -42,7 +41,6 @@ class Dijkstra:
         assert bin_map.any()
 
     def step(self):
-        deb = False
         best_node_index = self.best_node()
         x, y = self.nodes[best_node_index]
         parent_cost = self.graph[best_node_index][1]
@@ -66,7 +64,6 @@ class Dijkstra:
                             self.nodes_queue[index] = parent_cost + move_cost
                 if (new_x, new_y) == tuple(self.end_point):
                     self.end_node = self.node_num - 1
-                    print(deb)
                     self.dist_reached = True
 
     def get_path(self):
@@ -76,8 +73,6 @@ class Dijkstra:
             self.path.append(self.nodes[node_num])
             node_num = self.graph[node_num][0]
         self.path.append(self.nodes[node_num])
-        if not self.graph_printed:
-            self.graph_printed = True
         return self.path
 
     def best_node(self):
@@ -86,7 +81,7 @@ class Dijkstra:
         return i
 
     def is_obstacle(self, x, y):
-        return self.bool_map[x][y]
+        return self.bool_map[y][x]
 
     @staticmethod
     def get_motion_model():

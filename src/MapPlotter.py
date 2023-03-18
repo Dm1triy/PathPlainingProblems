@@ -198,6 +198,8 @@ class MapPlotter:
         start_point = 160, 160
         end_point = 195, 125
         space = self.map.copy()
+        # self.alg = Dijkstra(start_point=np.array(start_point),
+        #                     end_point=np.array(end_point), bin_map=space)
         # self.alg = Astar(start_point=np.array(start_point),
         #                  end_point=np.array(end_point), bin_map=space)
         self.alg = Rrtstar(start_point=np.array(start_point),

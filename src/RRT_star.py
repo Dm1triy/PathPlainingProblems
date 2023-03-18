@@ -11,9 +11,9 @@ class Rrtstar:
         self.bool_map = bin_map
         self.search_radius = search_radius
         self.goal_radius = goal_radius
-        self.goal_neighbors = dict()
         self.neighborhood_radius = neighborhood_radius
         self.total_nodes = total_nodes
+        self.goal_neighbors = dict()
         self.graph = {self.node_index(self.start_node): self.start_node}
         self.node_counter = 1
         self.dist_reached = False
