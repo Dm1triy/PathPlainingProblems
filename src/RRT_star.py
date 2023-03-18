@@ -5,7 +5,7 @@ import random
 class Rrtstar:
     def __init__(self, *, start_point=None, end_point=None,
                  bin_map=None, search_radius=3, goal_radius=6,
-                 neighborhood_radius=6, total_nodes=3000):
+                 neighborhood_radius=8, total_nodes=2000):
         self.start_node = self.Node(*start_point)
         self.goal_node = self.Node(*end_point)
         self.bool_map = bin_map
