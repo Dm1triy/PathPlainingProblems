@@ -4,8 +4,8 @@ import random
 
 class Rrtstar:
     def __init__(self, *, start_point=None, end_point=None,
-                 bin_map=None, search_radius=10, goal_radius=10,
-                 neighborhood_radius=20, total_nodes=500):
+                 bin_map=None, search_radius=3, goal_radius=6,
+                 neighborhood_radius=6, total_nodes=3000):
         self.start_node = self.Node(*start_point)
         self.goal_node = self.Node(*end_point)
         self.bool_map = bin_map
@@ -29,17 +29,17 @@ class Rrtstar:
             self.parent = parent
 
     def node_index(self, node):
-        return node.y * self.bool_map.shape[1] + self.bool_map.shape[0]
+        return node.y * self.bool_map.shape[1] + node.x
 
     def step(self):
-        rand_x = random.randrange(self.bool_map.shape[1]//2, self.bool_map.shape[1])
+        rand_x = random.randrange(self.bool_map.shape[1])
         rand_y = random.randrange(self.bool_map.shape[0])
         rand_node = self.Node(rand_x, rand_y)
         i_nearest, nearest_node = self.find_nearest_node(rand_node)
-        interpolated_node = self.calc_interpolated_node(nearest_node, rand_node)
-        i_interpolated = self.node_index(interpolated_node)
+        i_interpolated, interpolated_node = self.calc_interpolated_node(nearest_node, rand_node)
+        # there can be no obstacles between inter_node and nearest_node
 
-        if not interpolated_node:
+        if not interpolated_node or self.graph.get(i_interpolated):
             return
         self.nodes = np.append(self.nodes, [[interpolated_node.x, interpolated_node.y]], axis=0)
 
@@ -49,6 +49,7 @@ class Rrtstar:
 
         interpolated_node.parent = i_parent
         interpolated_node.cost = self.distance(parent, interpolated_node) + parent.cost
+
         self.graph[i_interpolated] = interpolated_node
         # display connection between parent and interpolated_node
 
@@ -63,9 +64,7 @@ class Rrtstar:
             self.dist_reached = True
 
     def get_path(self):
-        if len(self.goal_neighbors) == 0:
-            print('Path not found')
-            return None
+        assert self.goal_neighbors, "Path not found"
 
         i_parent, goal_parent = self.best_goal_neighbor()
         self.goal_node.parent = i_parent
@@ -84,39 +83,46 @@ class Rrtstar:
 
     @staticmethod
     def distance(node1, node2):
-        return np.linalg.norm([node1.x - node2.x, node1.y - node2.y])
+        res = np.linalg.norm([node1.x - node2.x, node1.y - node2.y])
+        if res == -1:
+            print("debug", node1.x - node2.x, node1.y - node2.y)
+        # print(res)
+        return res
 
     def calc_interpolated_node(self, real, imagine):
         d = self.distance(real, imagine)
         r = self.any_collisions_between(real, imagine)
         if d < self.search_radius and not r:
-            return imagine
-        elif r > self.search_radius:
-            r = self.search_radius
+            return self.node_index(imagine), imagine
+        elif r > self.search_radius or (d > self.search_radius and not r):
+            r = self.search_radius + 1
 
-        x = int(real.x + (imagine.x - real.x) * r / d)
-        y = int(real.y + (imagine.y - real.y) * r / d)
+        x = int(real.x + (imagine.x - real.x) * (r-1) / d)
+        y = int(real.y + (imagine.y - real.y) * (r-1) / d)
         if self.bool_map[y][x] == 1 and r == 1:
-            return None
-        return self.Node(x, y)
+            return None, None
+        interpolated = self.Node(x, y)
+        i = self.node_index(interpolated)
+        return i, interpolated
 
     def any_collisions_between(self, node1, node2):
         # checking all cells for an obstacle at a distance less than search_radius
         # (imagine.x - real.x)/d - unit direction vector
         d = self.distance(node1, node2)
-        for r in range(int(d)):
+        for r in range(1, int(d)):
             x = int(node1.x + (node2.x - node1.x) * r / d)
             y = int(node1.y + (node2.y - node1.y) * r / d)
             if self.bool_map[y][x] == 1:
-                # last distance without obstacle on the path
-                return r-1
+                # last obstacle on the path
+                return r  # !!! Problem !!!
         return False
 
     def find_neighbors(self, node):
-        # neighbors = {i: node for i, node in self.graph.items()
-        #              if self.distance(node, target) < self.neighborhood_radius}
-        neighbors = dict(filter(lambda neighbor: self.distance(neighbor[1], node) < self.neighborhood_radius,
-                                self.graph.items()))
+        neighbors = {i: neighbor for i, neighbor in self.graph.items()
+                     if self.distance(neighbor, node) < self.neighborhood_radius}
+        # neighbors = dict(filter(lambda neighbor: self.distance(neighbor[1], node) < self.neighborhood_radius,
+        #                         self.graph.items()))
+        assert neighbors, "neighbors is empty"
         return neighbors
 
     def choose_parent(self, neighbors_dict, new_node):
@@ -128,12 +134,11 @@ class Rrtstar:
 
     def rewire(self, neighbors_dict, new_node):
         del neighbors_dict[new_node.parent]
-        necessary_neighbors = {i: node for i, node in neighbors_dict.items()
-                               if new_node.cost + self.distance(new_node, node) < node.cost and
-                               not self.any_collisions_between(new_node, node)}
+        necessary_neighbors = {i: neighbor for i, neighbor in neighbors_dict.items()
+                               if new_node.cost + self.distance(new_node, neighbor) < neighbor.cost and
+                               not self.any_collisions_between(new_node, neighbor)}
         for i in necessary_neighbors:
             node = necessary_neighbors[i]
-            # old_parent = self.graph[node.parent]
             node.parent = self.node_index(new_node)
             node.cost = new_node.cost + self.distance(node, new_node)
             # display connection between node and new_node

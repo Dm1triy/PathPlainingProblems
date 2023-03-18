@@ -91,7 +91,7 @@ class Astar:
         return i
 
     def is_obstacle(self, x, y):
-        return self.bool_map[x][y]
+        return self.bool_map[y][x]
 
     @staticmethod
     def get_motion_model():

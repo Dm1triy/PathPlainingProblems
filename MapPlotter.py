@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors
+from matplotlib import collections as mc
 import math
 from rdp import rdp
 import cv2 as cv
@@ -204,21 +205,38 @@ class MapPlotter:
         ax, fig = self.init_plot(start_point, end_point, space)
 
         i = 0
+        line_segments = None
         while not self.alg.dist_reached:
             self.alg.step()
             if i % 200 == 0:
                 node_indx = self.reshape_array(self.alg.nodes)
-                ax.scatter(node_indx[1]+0.5, node_indx[0]+0.5, color='y', s=2, marker='H')
+                ax.scatter(node_indx[0]+0.5, node_indx[1]+0.5, color='y', s=2, marker='H')
+                if line_segments:
+                    mc.LineCollection.remove(line_segments)
+                line_segments = self.display_connections()
+                ax.add_collection(line_segments)
                 plt.pause(0.1)
             i += 1
         path = self.alg.get_path()
         if not path:
             return
         path = self.reshape_array(path)
-        ax.scatter(path[1]+0.5, path[0]+0.5, color='r', s=10, marker='H')
+        # ax.scatter(path[0]+0.5, path[1]+0.5, color='r', s=10, marker='H')
+        ax.plot(path[0] + 0.5, path[1] + 0.5, color='r')
         plt.show()
 
     def display_connections(self):
+        lines = []
+        if not self.alg.graph:
+            return
+        for i in self.alg.graph:
+            node = self.alg.graph[i]
+            if node.parent:
+                parent = self.alg.graph[node.parent]
+                lines.append([(node.x+0.5, node.y+0.5), (parent.x+0.5, parent.y+0.5)])
+        color = (0, 0, 0, 1)
+        lc = mc.LineCollection(lines, colors=color, linewidths=1)
+        return lc
 
     def init_plot(self, start_point, end_point, space):
         start = plt.Circle(start_point, 1, color='r')
